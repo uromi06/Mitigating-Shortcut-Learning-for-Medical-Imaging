@@ -32,6 +32,6 @@ For file synchronization, you can use, e.g., github (for code) or scp (Windows) 
 
 You can either work directly on the terminal (file editors: vim, nano) and/or primarily via file syncing.
 
-You can also directly connect to the VM via SSH within e.g. VisualStudio. (You should still ensure to very regularly sync your data/code elsewhere. *Do not rely on the maintained availability of the VM in any crucial way.*)
+You can also directly connect to the VM via SSH within e.g. VisualStudio: install Remote-SSH extension, "Remote-SSH -> Connect to Host" (You should still ensure to very regularly sync your data/code elsewhere. *Do not rely on the maintained availability of the VM in any crucial way.*)
 
 *Never forget that other users can see what you type on the command line --> do not enter github passwords, etc.*
