@@ -339,15 +339,12 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, required=False,
                        help='Directory above /CheXpert-v1.0-small',
                        default='/data')
-                       #default='/deep_learning/output/petersen/cxr_small_data')
     parser.add_argument('--csv_dir', type=str, required=False,
                        help='Directory above that contains train_drain_shortcut.csv, etc.',
-                       default='.')
-                       #default='/deep_learning/output/petersen/cxr_small_data')                       
+                       default='.')                 
     parser.add_argument('--out_dir', type=str, required=False,
                        help='Directory where outputs (logs, checkpoints, plots, etc.) will be placed',
-                       default='~/cxp_shortcut_out')
-                       #default='/deep_learning/output/petersen/cxr_small_data')                                              
+                       default='~/cxp_shortcut_out')                                          
     args = parser.parse_args()
     
     data_dir = Path(args.data_dir)
