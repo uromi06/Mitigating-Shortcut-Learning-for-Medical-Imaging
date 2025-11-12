@@ -56,7 +56,7 @@ def setup_logging(root_dir):
     sys.excepthook = exception_handler    
 
 
-def setup_wandb(root_dir):
+def setup_wandb(root_dir, balance_train, balance_val, select_chkpt_on):
 
     wandb_dir = root_dir / "wandb"
     wandb_dir.mkdir(exist_ok=True)
@@ -68,7 +68,11 @@ def setup_wandb(root_dir):
         "learning_rate": LR,
         "architecture": "densenet121",
         "dataset": "CheXpert",
-        "epochs": NUM_EPOCHS
+        "epochs": NUM_EPOCHS,
+        "balance_train": balance_train,
+        "balance_val": balance_val,
+        "select_chkpt_on": select_chkpt_on,
+        "loss": "BCE"
         }
     )       
 
@@ -86,9 +90,9 @@ class CXP_Model(nn.Module):
         
         # using BCEWithLogitsLoss, so no sigmoid needed - but need explicit sigmoid for prob prediction
         self.clf = nn.Sequential(
-            nn.Linear(num_features, 512),  # 1024 -> 512
+            nn.Linear(num_features, 512),
             nn.ReLU(),
-            nn.Linear(512, 1)  # 512 -> 1
+            nn.Linear(512, 1)
         )
 
     def forward(self, x):
@@ -166,9 +170,13 @@ class CXP_dataset(torchvision.datasets.VisionDataset):
     def __len__(self) -> int:
         return len(self.path)
 
-def train_and_eval(data_dir, csv_dir, out_dir, balance_train_set=False):
-    train_data = CXP_dataset(data_dir, csv_dir / 'train_drain_shortcut_v2.csv')
-    val_data = CXP_dataset(data_dir, csv_dir / 'val_drain_shortcut_v2.csv', augment=False)
+def train_and_eval(data_dir, csv_dir, out_dir, balance_train_set=False, balance_val_set=False, select_chkpt_on="loss"):
+    if balance_val_set:
+        train_data = CXP_dataset(data_dir, csv_dir / 'train_drain_shortcut_v2.csv')
+        val_data = CXP_dataset(data_dir, csv_dir / 'val_drain_shortcut_v2.csv', augment=False)
+    else:
+        train_data = CXP_dataset(data_dir, csv_dir / 'train_drain_shortcut.csv')
+        val_data = CXP_dataset(data_dir, csv_dir / 'val_drain_shortcut.csv', augment=False)
     test_data_aligned = CXP_dataset(data_dir, csv_dir / 'test_drain_shortcut_aligned.csv', augment=False)
     test_data_misaligned = CXP_dataset(data_dir, csv_dir / 'test_drain_shortcut_misaligned.csv', augment=False)
     
@@ -206,6 +214,7 @@ def train_and_eval(data_dir, csv_dir, out_dir, balance_train_set=False):
     test_auroc_misaligned = BinaryAUROC()
 
     best_val_loss = 10000.0
+    best_val_auroc = 0.0
 
     # Train the model
     for epoch in range(NUM_EPOCHS):
@@ -271,7 +280,8 @@ def train_and_eval(data_dir, csv_dir, out_dir, balance_train_set=False):
                    "brier/train": train_brier,
                    "brier/val": val_brier})
         
-        if val_loss < best_val_loss:  # val_auroc.compute() > best_val_auroc:
+        if (select_chkpt_on.upper() == "AUROC" and val_auroc.compute() > best_val_auroc) or \
+            (select_chkpt_on.upper() == "LOSS" and val_loss < best_val_loss):
             best_val_auroc = val_auroc.compute()
             best_val_loss = val_loss
             logging.info(f"Saving new best chkpt at epoch {epoch}.")
@@ -388,7 +398,13 @@ if __name__ == '__main__':
                        default='~/cxp_shortcut_out')     
     parser.add_argument('--balance_train', type=lambda x: x.lower() == 'true', required=False,
                        help='Whether to balance the train set by drain presence for both classes',
-                       default=False)                                      
+                       default=False)             
+    parser.add_argument('--balance_val', type=lambda x: x.lower() == 'true', required=False,
+                       help='Whether to balance the val set by drain presence for both classes',
+                       default=False)                 
+    parser.add_argument('--select_chkpt_on', type=str, required=False,
+                       help='Val metric to select final chkpt on. Possible values right now: AUROC, Loss.',
+                       default="loss")                                 
     args = parser.parse_args()
     
     data_dir = Path(args.data_dir)
@@ -402,12 +418,20 @@ if __name__ == '__main__':
     else:
         logging.info("Using CPU")
 
+    if args.balance_train:
+        logging.info("Using train set balancing")
+    else:
+        logging.info("Using native train distribution = no balancing")
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
     
     results = []
     for _ in range(NUM_RUNS):
-        setup_wandb(out_dir) 
-        results.append(train_and_eval(data_dir, csv_dir, out_dir, balance_train_set=args.balance_train))
+        setup_wandb(out_dir, args.balance_train, args.balance_val, args.select_chkpt_on) 
+        results.append(train_and_eval(data_dir, csv_dir, out_dir, 
+                                      balance_train_set=args.balance_train,
+                                      balance_val_set=args.balance_val,
+                                      select_chkpt_on=args.select_chkpt_on))
         wandb.finish()
 
     logging.info("===== FINAL RESULTS ACROSS RUNS =====")
