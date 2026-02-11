@@ -1,6 +1,13 @@
 # Pneumothorax-chest drain shortcut learning
 
 Project @ [UBRA AI Toolbox Hackathon](https://www.bremen-research.de/en/ai-toolbox-hackathon)
+## Overview
+This project studies **shortcut learning** in chest X-ray pneumothorax prediction: models may over-rely on the presence of a **chest drain** (a treatment artifact) instead of learning radiographic evidence of pneumothorax. This can cause failures when the shortcut distribution shifts (e.g., pneumothorax without a drain).
+## Code entrypoints
+- **Baseline (original scaffold):** `cxp_pneu.py`
+- **My extended version (SupCon + multi-run):** `cxp_pneu_v2.py`
+- **SupCon loss module:** `supcon.py`
+
 
 ## Getting set up
 - [ ] Create a GitHub account (if you do not have one yet)
@@ -11,6 +18,30 @@ Project @ [UBRA AI Toolbox Hackathon](https://www.bremen-research.de/en/ai-toolb
 - [ ] Go through [the baseline code](cxp_pneu.py); make sure you understand it
 - [ ] Implement [the Serna et al. approach](https://www.sciencedirect.com/science/article/pii/S0004370222000224?via%3Dihub) as a potential shortcut learning mitigation method
 - [ ] Go through the list of open issues; address what you find interesting or explore your own ideas freely
+
+
+
+## Dataset
+We use the **CheXpert** dataset (research use agreement required). We evaluate performance across clinically relevant slices defined by:
+- Pneumothorax label (pos/neg)
+- Chest drain presence (present/absent)
+
+Key robustness slice: **Pneumothorax+ & Drain−** (where shortcut reliance is most harmful).
+
+## Training details
+- Backbone: DenseNet121 (ImageNet weights)
+- Loss: BCEWithLogitsLoss; optional `BCE + λ·SupCon` (λ=0.50)
+- SupCon: projection head 1024→256→128; temperature τ=0.10
+- EMA: exponential moving average model (decay 0.9) used for eval
+- Repeats: NUM_RUNS=10; final metrics reported as mean ± std
+
+## Supervised Contrastive Loss (SupCon) — implementation note
+This repo includes a **single-GPU** supervised contrastive loss module used to encourage label-consistent clustering in representation space.
+
+**Code:** `SupervisedContrastiveLoss`  
+**Inputs:**
+- `feats`: embedding tensor of shape `[B, D]` (expected from a projection head)
+- `labels`: tensor of shape `[B]` (binary or multi-class)
 
 ## Reading materials (optional)
 General shortcut learning:
@@ -30,3 +61,13 @@ Drawbacks of DANN / CDANN (baseline method for 'domain invariance' which can als
 - [MEDFAIR: Benchmarking Fairness for Medical Imaging](https://arxiv.org/abs/2210.01725)
 
 Alternative approach pursued here: [Sensitive loss: Improving accuracy and fairness of face representations with discrimination-aware deep learning](https://www.sciencedirect.com/science/article/pii/S0004370222000224)
+
+## Credits & Contributions
+This repository was developed as part of the **UBRA AI Toolbox Hackathon**.
+
+- **Baseline code and project framework:** Eike Petersen  
+- **SupCon loss:** Based on the Supervised Contrastive Learning objective (Khosla et al., NeurIPS 2020)
+- **Modifications in this fork (Uromi):**
+  - Multi-run evaluation (mean ± std across runs)
+  - Balanced validation option + drain-aware train balancing (WeightedRandomSampler)
+  - SupCon training option (projection head + combined BCE + λ·SupCon objective)
